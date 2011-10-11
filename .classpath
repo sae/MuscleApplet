@@ -2,5 +2,6 @@
 <classpath>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-	<classpathentry kind="var" path="JAVACARD_HOME/lib/api.jar"/>
+	<classpathentry kind="lib" path="/home/sae/distr/SCard/java_card_kit-2_2_1/lib/api.jar"/>
+	<classpathentry kind="output" path="bin"/>
 </classpath>
