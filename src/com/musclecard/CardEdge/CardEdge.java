@@ -35,7 +35,7 @@ import javacard.security.RSAPrivateKey;
 import javacard.security.RSAPublicKey;
 import javacard.security.RandomData;
 import javacard.security.Signature;
-import javacardx.apdu.ExtendedLength;
+//SAE fix - for jc 2_2_1: import javacardx.apdu.ExtendedLength;
 import javacardx.crypto.Cipher;
 
 /**
@@ -54,7 +54,7 @@ import javacardx.crypto.Cipher;
  * </ul>
  */
 
-public class CardEdge extends javacard.framework.Applet implements ExtendedLength {
+public class CardEdge extends javacard.framework.Applet /*implements ExtendedLength*/ {
 
 	/* constants declaration */
 
@@ -98,7 +98,8 @@ public class CardEdge extends javacard.framework.Applet implements ExtendedLengt
 										 */
 
 	private static byte[] acl; // Temporary ACL
-
+	//SAE fix:
+	private static byte PIN_INIT_VALUE[]; 
 	// code of CLA byte in the command APDU header
 	private final static byte CardEdge_CLA = (byte) 0xB0;
 
@@ -285,6 +286,27 @@ public class CardEdge extends javacard.framework.Applet implements ExtendedLengt
 
 	private CardEdge(byte[] bArray, short bOffset, byte bLength) {
 		// FIXME: something should be done already here, not only with setup APDU
+		//SAE fix: init pin array - this need for correct initialization of applet
+		 setupDone = false;
+		  	PIN_INIT_VALUE = new byte[8];
+		  	
+		  	// the default PIN is "Muscle00"
+		  	PIN_INIT_VALUE[0] = (byte)'M';
+		  	PIN_INIT_VALUE[1] = (byte)'u';
+		  	PIN_INIT_VALUE[2] = (byte)'s';
+		  	PIN_INIT_VALUE[3] = (byte)'c';
+		  	PIN_INIT_VALUE[4] = (byte)'l';
+		  	PIN_INIT_VALUE[5] = (byte)'e';
+		  	PIN_INIT_VALUE[6] = (byte)'0';
+		  	PIN_INIT_VALUE[7] = (byte)'0';
+		  	
+		  	if (!CheckPINPolicy(PIN_INIT_VALUE, (short)0, (byte)PIN_INIT_VALUE.length))
+		  	ISOException.throwIt((short)SW_INTERNAL_ERROR);
+		  	
+		  	ublk_pins = new OwnerPIN[MAX_NUM_PINS];
+		  	pins = new OwnerPIN[MAX_NUM_PINS];
+		  	pins[0] = new OwnerPIN((byte)3, (byte)PIN_MAX_SIZE);
+		  	pins[0].update(PIN_INIT_VALUE, (short)0, (byte)PIN_INIT_VALUE.length); 		
 	}
 
 	public static void install(byte[] bArray, short bOffset, byte bLength) {
@@ -423,6 +445,7 @@ public class CardEdge extends javacard.framework.Applet implements ExtendedLengt
 	 * 
 	 * Incoming data:
 	 * PIN0 len + PIN0 + PUK0 len + PUK0 +
+	 * SAE: pin0 len + pin0 + pin0tries + ublk0Tries + pin0newlen + pin0new ...
 	 */
 	private void setup(APDU apdu, byte[] buffer) {
 		short bytesLeft = Util.makeShort((byte) 0x00, buffer[ISO7816.OFFSET_LC]);
@@ -494,7 +517,6 @@ public class CardEdge extends javacard.framework.Applet implements ExtendedLengt
 		create_object_ACL = buffer[base++];
 		create_key_ACL = buffer[base++];
 		create_pin_ACL = buffer[base++];
-
 		mem = new MemoryManager((short) mem_size);
 		om = new ObjectManager(mem);
 
@@ -750,18 +772,22 @@ public class CardEdge extends javacard.framework.Applet implements ExtendedLengt
 		byte[] buffer = apduBuffer;
 
 		short bytesLeft = apdu.setIncomingAndReceive();
+		
+		short dataOffset = ISO7816.OFFSET_CDATA;
+/* SAE fix for 2_2_1
 		short LC = apdu.getIncomingLength();
 		short dataOffset = apdu.getOffsetCdata();
 
 		if ((short) (LC + dataOffset) > EXT_APDU_BUFFER_SIZE)
 			ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 
-		/* Is this an extended APDU? */
+		/* Is this an extended APDU? * /
 		if (bytesLeft != LC) {
 			getData(apdu, apduBuffer, (short) (dataOffset + bytesLeft), recvBuffer);
 			buffer = recvBuffer;
 			bytesLeft = LC;
 		}
+*/		
 		byte key_nb = buffer[ISO7816.OFFSET_P1];
 		if ((key_nb < 0) || (key_nb >= MAX_NUM_KEYS) || (keys[key_nb] == null))
 			ISOException.throwIt(SW_INCORRECT_P1);
@@ -1091,6 +1117,7 @@ public class CardEdge extends javacard.framework.Applet implements ExtendedLengt
 		 * error If the same keypair object was used previously, check keypair
 		 * size & type
 		 */
+		//ISOException.throwIt((short)0x6fff);
 		if ((keyPairs[pub_key_nb] == null) && (keyPairs[prv_key_nb] == null)) {
 			keyPairs[pub_key_nb] = new KeyPair(pub_key, prv_key);
 			keyPairs[prv_key_nb] = keyPairs[pub_key_nb];
@@ -1101,7 +1128,12 @@ public class CardEdge extends javacard.framework.Applet implements ExtendedLengt
 			// This should never happen according with this Applet policies
 			ISOException.throwIt(SW_INTERNAL_ERROR);
 		// We Rely on genKeyPair() to make all necessary checks about types
-		kp.genKeyPair();
+		try {
+			kp.genKeyPair();
+		} catch (Exception e) {
+			ISOException.throwIt(SW_UNSPECIFIED_ERROR);
+		}
+		//ISOException.throwIt((short)0x6fff);
 	}
 
 	// Data has already been receive()ed
