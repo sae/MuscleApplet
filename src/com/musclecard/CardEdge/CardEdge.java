@@ -103,6 +103,10 @@ public class CardEdge extends javacard.framework.Applet /*implements ExtendedLen
 	// code of CLA byte in the command APDU header
 	private final static byte CardEdge_CLA = (byte) 0xB0;
 
+	// SAE for iso verify pin
+	private final static byte CardEdge_CLA_ISO = (byte) 0x00;
+	private final static byte INS_VERIFY_PIN_ISO = (byte) 0x20;
+	// /SAE
 	/****************************************
 	 * Instruction codes *
 	 ****************************************/
@@ -360,6 +364,22 @@ public class CardEdge extends javacard.framework.Applet /*implements ExtendedLen
 		// check SELECT APDU command
 		if ((buffer[ISO7816.OFFSET_CLA] == 0) && (buffer[ISO7816.OFFSET_INS] == (byte) 0xA4))
 			return;
+		
+		// SAE - add ISO VERIFY - for card readers with pinpad
+		if (buffer[ISO7816.OFFSET_CLA] == CardEdge_CLA_ISO) {
+			byte ins = buffer[ISO7816.OFFSET_INS];
+			if (ins == (byte) INS_VERIFY_PIN_ISO) {
+				//ISOVerify has different order of params: P1=0x00 P2=PIN_Number
+				//(muscle verify: P1=PIN_Number P2=0x00)
+				//so we have to swap p1 and p2
+				byte p = buffer[ISO7816.OFFSET_P1];
+				buffer[ISO7816.OFFSET_P1]=buffer[ISO7816.OFFSET_P2];
+				buffer[ISO7816.OFFSET_P2]=p;
+				VerifyPIN(apdu, buffer); //throw exception if check failed
+				return;
+			}
+		}// /SAE ISO VERIFY
+		
 		// verify the rest of commands have the
 		// correct CLA byte, which specifies the
 		// command structure
